@@ -1,0 +1,48 @@
+{% extends "layout.html" %}
+
+{% block title %}Scoreboard - {{ challenge.name }}{% endblock %} {# Dynamic title including the challenge name #}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <h1 class="text-center mb-1">Scoreboard</h1>
+        <h2 class="text-center text-muted mb-4">Challenge: {{ challenge.name }}</h2> {# Displaying the specific challenge name #}
+        
+        {% if scores %} {# Check if there are any scores to display for this challenge #}
+        <div class="table-responsive shadow-sm">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Rank</th>
+                        <th>Name</th>
+                        <th>Score</th>
+                        <th>Time Taken (s)</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {# Loop through each score entry fetched from the database #}
+                    {% for score in scores %}
+                    <tr>
+                        <td>{{ loop.index }}</td> {# Display rank based on loop iteration #}
+                        <td>{{ score.username }}</td>
+                        <td>{{ score.score }}</td>
+                        <td>{{ score.time_taken_seconds }}</td>
+                        <td>{{ score.timestamp.split(' ')[0] }}</td> {# Display only the date part of the timestamp #}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        {# Message displayed if no scores are recorded yet for this challenge #}
+        <p class="text-center text-muted">No scores yet for this challenge. Be the first!</p>
+        {% endif %}
+        <div class="text-center mt-4">
+            {# Links to take another test or view other scoreboards #}
+            <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg me-2">Take Another Test</a>
+            <a href="{{ url_for('scoreboards_list_page') }}" class="btn btn-secondary btn-lg">View Other Scoreboards</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

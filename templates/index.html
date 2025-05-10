@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+
+{% block title %}OpenCoderRank{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-body p-5">
+                <h1 class="card-title text-center mb-4">OpenCoderRank Challenge</h1> <!-- Consider making this title configurable or generic -->
+                <p class="text-center text-muted mb-4">Select a challenge and enter your name to begin.</p>
+                
+                {# Form to submit username and selected challenge to the '/' route (index function in app.py) via POST #}
+                <form method="POST" action="{{ url_for('index') }}">
+                    <div class="mb-3">
+                        <label for="challenge_id" class="form-label">Select Challenge:</label>
+                        <select class="form-select form-select-lg" id="challenge_id" name="challenge_id" required>
+                            <option value="" disabled selected>-- Choose a Challenge --</option>
+                            {# Populate dropdown with challenges from the CHALLENGES dictionary passed from app.py #}
+                            {% for cid, cinfo in challenges.items() %}
+                            <option value="{{ cid }}">{{ cinfo.name }} - {{ cinfo.description }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Your Name:</label>
+                        <input type="text" class="form-control form-control-lg" id="username" name="username" placeholder="E.g., Alex Smith" required minlength="2">
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">Start Test</button>
+                    </div>
+                </form>
+                 <div class="text-center mt-4">
+                    {# Link to the page listing all scoreboards #}
+                    <a href="{{ url_for('scoreboards_list_page') }}" class="btn btn-outline-secondary">View All Scoreboards</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

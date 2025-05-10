@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OpenCoderRank{% endblock %}</title> {# Page title block, customizable by child templates #}
+    
+    <!-- Bootstrap CSS for styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS file -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <!-- CodeMirror CSS for code editor styling -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/material-darker.min.css"> <!-- Example theme for CodeMirror -->
+    
+    {% block head_extra %}{% endblock %} {# Block for additional head elements like custom styles for specific pages #}
+</head>
+<body>
+    <!-- Fixed-top navigation bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+              <span style="color: #FF9933;">Open</span><span style="color: white;">Coder</span><span style="color: #138808;">Rank</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    {# Display user-specific info if a test session is active #}
+                    {% if session.username and session.challenge_id %}
+                        <li class="nav-item">
+                            <span class="navbar-text me-3">User: {{ session.username }}</span>
+                        </li>
+                         <li class="nav-item">
+                            {# Display current challenge name; uses CHALLENGES dict from app context #}
+                            <span class="navbar-text me-3">Challenge: {{ CHALLENGES[session.challenge_id].name if session.challenge_id in CHALLENGES else "N/A" }}</span>
+                        </li>
+                         <li class="nav-item">
+                            <span class="navbar-text me-3" id="nav-score">Score: {{ session.score|default(0) }}</span> {# Display current score, defaults to 0 #}
+                        </li>
+                        <li class="nav-item">
+                            {# Form to submit a POST request to restart_test endpoint #}
+                            <form action="{{ url_for('restart_test') }}" method="post" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-warning">Restart (New Challenge/User)</button>
+                            </form>
+                        </li>
+                    {% endif %}
+                    <li class="nav-item">
+                         <a class="nav-link" href="{{ url_for('scoreboards_list_page') }}">Scoreboards</a> {# Link to view all scoreboards #}
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main content area -->
+    <main class="container mt-5 pt-5"> {# Padding top to account for fixed navbar #}
+        {# Display flashed messages (e.g., success, error, info) from Flask #}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %} {# Main content block, to be filled by child templates #}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer mt-auto py-3 bg-light text-center">
+        <div class="container">
+            <span class="text-muted">© {{ G_YEAR }} OpenCoderRank.</span> {# Dynamically updated year #}
+        </div>
+    </footer>
+    
+    <!-- Bootstrap JavaScript Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- CodeMirror JavaScript for code editor functionality -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/sql/sql.min.js"></script> <!-- SQL mode for CodeMirror -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/python/python.min.js"></script> <!-- Python mode for CodeMirror -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/matchbrackets.js"></script> <!-- Bracket matching addon -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/closebrackets.js"></script> <!-- Auto-closing brackets addon -->
+    
+    <script>
+        // Global JavaScript variable for the current year, used in the footer.
+        const G_YEAR = new Date().getFullYear();
+        // Update elements with class 'footer .text-muted' to replace '{{ G_YEAR }}' placeholder.
+        // This is a simple way to set the year without needing Jinja context in static JS files.
+        document.querySelectorAll('.footer .text-muted').forEach(el => {
+            if (el.innerHTML.includes('{{ G_YEAR }}')) { // Check if placeholder exists to avoid multiple replacements
+                 el.innerHTML = el.innerHTML.replace('{{ G_YEAR }}', G_YEAR);
+            }
+        });
+    </script>
+    
+    {% block scripts %}{% endblock %} {# Block for additional page-specific JavaScript files or inline scripts #}
+</body>
+</html>

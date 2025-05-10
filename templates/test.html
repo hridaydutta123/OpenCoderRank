@@ -1,0 +1,126 @@
+{% extends "layout.html" %}
+
+{% block title %}Coding Test - {{ username }} - {{ challenge_name }}{% endblock %}
+
+{% block head_extra %}
+<!-- Custom CSS styles specific to the test page -->
+<style>
+    .question-meta span { margin-right: 15px; } /* Spacing for question metadata items */
+    #code-editor-container .CodeMirror { min-height: 250px; font-size: 15px; } /* Styling for CodeMirror editor */
+    #output-area { 
+        background-color: #f8f9fa; 
+        border: 1px solid #dee2e6; 
+        padding: 15px; 
+        min-height: 100px; 
+        border-radius: .25rem; 
+        font-family: monospace; /* Monospace font for code-like output */
+        overflow-x: auto; /* Allow horizontal scrolling for wide content like tables */
+    }
+    /* Styles for tables within the output area (e.g., SQL results) */
+    #output-area table.results-table { 
+        width: 100%; 
+        margin-top:10px; 
+        table-layout: auto; /* Allow table to adjust column widths based on content */
+    }
+    #output-area table.results-table th, 
+    #output-area table.results-table td { 
+        border: 1px solid #ccc; 
+        padding: 5px; 
+        text-align: left; 
+        white-space: normal; /* Allow text wrapping within cells */
+    }
+    /* Styling for list group items (e.g., Python test case results) */
+    #output-area .list-group-item { font-size: 0.9rem; }
+    .question-description { font-size: 1.1rem; }
+    /* Styling for SQL schema display area */
+    .schema-details { 
+        background-color: #e9ecef; 
+        padding: 10px; 
+        border-radius: 5px; 
+        font-family: monospace; 
+        white-space: pre-wrap; /* Preserve whitespace and wrap lines */
+        max-height: 200px; /* Limit height and enable vertical scroll */
+        overflow-y: auto; 
+    }
+    .challenge-header { font-size: 1.2rem; color: #6c757d; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="test-container">
+    <!-- Question Title and Progress/Timer -->
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        <h2 id="question-title" class="mb-0">Loading question...</h2>
+        <div class="fw-bold fs-5">
+            Question: <span id="question-progress">? / ?</span> | Timer: <span id="question-timer" class="text-danger">00:00</span>
+        </div>
+    </div>
+    <!-- Challenge Name Display -->
+    <div class="challenge-header mb-3">Challenge: <span id="current-challenge-name">{{ challenge_name }}</span></div>
+    
+    <!-- Question Metadata (Level, Language) -->
+    <div class="question-meta mb-3">
+        <span><strong>Level:</strong> <span id="question-level">N/A</span></span>
+        <span><strong>Language:</strong> <span id="question-language">N/A</span></span>
+    </div>
+
+    <!-- Overall Test Progress Bar -->
+    <div class="progress mb-3" style="height: 5px;">
+      <div id="test-progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    </div>
+
+    <!-- Question Description -->
+    <p id="question-description" class="mb-3 question-description">Loading description...</p>
+
+    <!-- SQL Schema Display (hidden by default, shown for SQL questions) -->
+    <div id="sql-schema-container" class="mb-3" style="display:none;">
+        <h5>Database Schema:</h5>
+        <pre id="schema-details" class="schema-details">Loading schema...</pre>
+    </div>
+
+    <!-- CodeMirror Editor Container -->
+    <div id="code-editor-container" class="mb-3">
+        <textarea id="code-editor"></textarea> <!-- CodeMirror will attach to this textarea -->
+    </div>
+
+    <!-- Action Buttons (Run Code, Next Question, Finish Test) -->
+    <div class="mb-3 d-flex justify-content-start">
+        <button id="run-code-btn" class="btn btn-success me-2">Run Code</button>
+        <button id="next-question-btn" class="btn btn-primary" style="display:none;">Next Question</button>
+        <button id="finish-test-btn" class="btn btn-info" style="display:none;">Finish Test & View Scoreboard</button>
+    </div>
+
+    <!-- Output Area for Code Evaluation Results -->
+    <div id="output-area-container">
+        <h5>Output:</h5>
+        <div id="output-area">
+            <p class="text-muted">Run your code to see the output here.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Test Completion Message (hidden by default) -->
+<div id="test-completed-message" class="text-center" style="display:none;">
+    <h2>Test Completed!</h2>
+    <p>Challenge: <strong id="completed-challenge-name"></strong></p>
+    <p>Your final score is: <strong id="final-score">0</strong>.</p>
+    <p>Total time taken: <strong id="total-time-taken">0s</strong>.</p>
+    <a href="#" id="view-challenge-scoreboard-link" class="btn btn-lg btn-primary mt-3">View Challenge Scoreboard</a>
+    {# Form to restart the test, goes to a new user/challenge selection #}
+    <form action="{{ url_for('restart_test') }}" method="post" class="d-inline">
+         <button type="submit" class="btn btn-lg btn-outline-secondary mt-3 ms-2">Start New Test (New User/Challenge)</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // This constant provides the base URL for listing scoreboards.
+    // The client-side script (script.js) will append the specific challenge_id to this
+    // when constructing the link to a particular challenge's scoreboard.
+    const SCOREBOARD_BASE_URL = "{{ url_for('scoreboards_list_page') }}"; 
+</script>
+<!-- Main client-side JavaScript file for test page logic -->
+<!-- This script handles fetching questions, submitting code, updating UI, timers, etc. -->
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+{% endblock %}
