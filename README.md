@@ -5,7 +5,8 @@
 <!-- [![Coverage Status](https://coveralls.io/repos/github/yourusername/OpenCoderRank/badge.svg?branch=main)](https://coveralls.io/github/yourusername/OpenCoderRank) -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) <!-- Add a LICENSE.md file with MIT license text -->
 
-OpenCoderRank is a basic (and quick setup based) web platform built with Flask, designed as a starting point for developing a robust in-house solution for SQL and Python coding tests. It allows organizations to host coding challenges and evaluate candidates efficiently.
+OpenCoderRank is a lightweight yet powerful web platform tailored for rapid deployment and seamless management of SQL and Python coding challenges. Designed with clubs, academic groups and hackathons in mind, it provides an intuitive interface to host custom coding contests, assess participants' solutions in real time and streamline evaluation with minimal setup. Whether you're running a weekend coding sprint or preparing for inter-college competitions, OpenCoderRank delivers a fast, flexible and reliable environment to engage and evaluate developers efficiently.
+
 ![Demo](OpenCoderRank.gif)
 ## ✨ Features
 
