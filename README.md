@@ -13,6 +13,7 @@ OpenCoderRank is a lightweight yet powerful web platform tailored for rapid depl
 *   **Multi-language Support:** Currently supports SQL (SQLite dialect) and Python 3 challenges.
 *   **Challenge-based Testing:** Group questions into distinct challenges (e.g., "SQL Basics", "Python Advanced Problems").
 *   **Dynamic Question Loading:** Questions are fetched asynchronously for a smooth user experience on the test page.
+*   **Paste Prevention:** Code editor disables pasting to encourage original problem-solving during assessments.
 *   **Code Evaluation:**
     *   **SQL:** Executes user queries against a predefined schema and compares the output with the expected result set.
     *   **Python:** Runs user-submitted Python functions against a series of test cases in a basic sandboxed environment (using `subprocess`).
@@ -22,6 +23,7 @@ OpenCoderRank is a lightweight yet powerful web platform tailored for rapid depl
 *   **Customizable:** Easily add new questions and challenges by modifying Python data structures.
 *   **User-Friendly Interface:** Built with Bootstrap for a responsive design and CodeMirror for an enhanced code editing experience with syntax highlighting.
 *   **CLI for DB Initialization:** Includes a Flask CLI command to set up the database schema.
+*   **Full-Screen Enforcement:** The platform runs only in full-screen mode to minimize distractions and prevent task-switching.
 
 ## 🚀 Getting Started
 
