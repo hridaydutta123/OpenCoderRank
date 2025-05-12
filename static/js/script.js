@@ -160,22 +160,38 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function startQuestionTimer(durationSeconds) { 
+    function startQuestionTimer(durationSeconds) {
         clearInterval(questionTimerInterval);
-        let elapsedSeconds = 0; 
+        let elapsedSeconds = 0;
         const timerDisplay = document.getElementById('question-timer');
-
         if (!timerDisplay) return;
-        
-        timerDisplay.textContent = "00:00"; 
+
+        timerDisplay.textContent = "00:00";
+        timerDisplay.style.color = 'green'; // Start with green
 
         questionTimerInterval = setInterval(() => {
             elapsedSeconds++;
             const minutes = Math.floor(elapsedSeconds / 60);
             const seconds = elapsedSeconds % 60;
             timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+            // Define thresholds for color changes
+            const orangeThresholdPercentage = 0.75; // Change to orange at 75% of duration
+            const redThresholdPercentage = 0.90;    // Change to red at 90% of duration
+
+            const orangeThreshold = Math.floor(durationSeconds * orangeThresholdPercentage);
+            const redThreshold = Math.floor(durationSeconds * redThresholdPercentage);
+
+            if (elapsedSeconds >= redThreshold) {
+                timerDisplay.style.color = 'red';
+            } else if (elapsedSeconds >= orangeThreshold) {
+                timerDisplay.style.color = 'orange';
+            }
         }, 1000);
     }
+
+// Example usage: Start a timer for 30 seconds
+startQuestionTimer(30);
 
     function loadQuestion() {
         fetch('/api/question')
@@ -227,6 +243,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('finish-test-btn').style.display = 'none';
 
                 startQuestionTimer(data.time_limit_seconds); 
+                
+                // Add time limit to code
+                const minutes = Math.floor(data.time_limit_seconds / 60);
+                const seconds = data.time_limit_seconds % 60;
+                document.getElementById('time-limit').textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+               
             })
             .catch(error => {
                 console.error('Fatal error loading question:', error);
