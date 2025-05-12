@@ -193,8 +193,11 @@ def get_current_question_api():
     challenge_id = session['challenge_id']
 
     # Check if all questions have been answered
-    if current_idx >= len(question_ids):
+    if current_idx >= len(question_ids) and len(question_ids) > 0 : # Check len > 0 to handle empty challenges properly
         return jsonify({"test_completed": True, "score": session.get('score', 0)})
+    elif not question_ids: # No questions in this challenge
+         return jsonify({"test_completed": True, "score": session.get('score', 0), "message": "No questions in this challenge."})
+
 
     q_id = question_ids[current_idx]
     # Fetch the full question data using its global ID
@@ -460,6 +463,27 @@ def evaluate_python(user_code, question_data):
         "output": overall_status_message + results_html, # Combine status message and detailed results
         "passed_all_tests": all_tests_passed
     }
+
+
+@app.route('/api/previous_question', methods=['POST'])
+def previous_question_api():
+    """
+    API endpoint to navigate to the previous question.
+    Updates the current question index in the session.
+    """
+    if 'username' not in session or 'challenge_id' not in session:
+        return jsonify({"error": "Not authenticated or challenge not selected"}), 401
+
+    current_idx = session.get('current_question_idx', 0)
+    
+    if current_idx > 0:
+        current_idx -= 1
+        session['current_question_idx'] = current_idx
+        session['question_start_time'] = time.time() # Reset start time for the new question
+        return jsonify({"navigated": True})
+    else:
+        # Already at the first question or invalid state
+        return jsonify({"navigated": False, "message": "Already at the first question."})
 
 
 @app.route('/api/next_question', methods=['POST'])
