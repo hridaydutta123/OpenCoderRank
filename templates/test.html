@@ -6,7 +6,7 @@
 <!-- Custom CSS styles specific to the test page -->
 <style>
     .question-meta span { margin-right: 15px; } /* Spacing for question metadata items */
-    #code-editor-container .CodeMirror { min-height: 250px; font-size: 15px; } /* Styling for CodeMirror editor */
+    #code-editor-container .CodeMirror { min-height: 250px; font-size: 15px; border: 1px solid #ced4da; border-radius: .25rem;} /* Styling for CodeMirror editor */
     #output-area { 
         background-color: #f8f9fa; 
         border: 1px solid #dee2e6; 
@@ -21,17 +21,23 @@
         width: 100%; 
         margin-top:10px; 
         table-layout: auto; /* Allow table to adjust column widths based on content */
+        border-collapse: collapse; /* Ensure borders are clean */
     }
     #output-area table.results-table th, 
     #output-area table.results-table td { 
         border: 1px solid #ccc; 
-        padding: 5px; 
+        padding: 5px 8px; /* Adjusted padding */
         text-align: left; 
         white-space: normal; /* Allow text wrapping within cells */
+        font-size: 0.9rem; /* Slightly smaller font for table content */
     }
+    #output-area table.results-table th {
+        background-color: #e9ecef; /* Light background for table headers */
+    }
+
     /* Styling for list group items (e.g., Python test case results) */
     #output-area .list-group-item { font-size: 0.9rem; }
-    .question-description { font-size: 1.1rem; }
+    .question-description { font-size: 1.1rem; margin-bottom: 1rem; }
     /* Styling for SQL schema display area */
     .schema-details { 
         background-color: #e9ecef; 
@@ -41,6 +47,7 @@
         white-space: pre-wrap; /* Preserve whitespace and wrap lines */
         max-height: 200px; /* Limit height and enable vertical scroll */
         overflow-y: auto; 
+        border: 1px solid #ced4da;
     }
     .challenge-header { font-size: 1.2rem; color: #6c757d; }
     #fullscreen-prompt {
@@ -58,6 +65,71 @@
         align-items: center;
         text-align: center;
     }
+    /* Question Number Panel Styles */
+    #question-navigation-panel {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 20px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+    }
+    .qnp-item {
+        padding: 8px 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background-color 0.2s, border-color 0.2s;
+    }
+    .qnp-item.qnp-unattempted { background-color: #fff; border-color: #ccc; color: #555; }
+    .qnp-item.qnp-correct { background-color: #d4edda; border-color: #c3e6cb; color: #155724; }
+    .qnp-item.qnp-incorrect { background-color: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+    .qnp-item.qnp-current { box-shadow: 0 0 0 0.2rem rgba(0,123,255,.5); border-color: #007bff; }
+    .qnp-item:hover { background-color: #e9ecef; }
+
+    /* MCQ Options Styling */
+    #mcq-options-container { margin-bottom: 1.5rem; }
+    .mcq-option {
+        display: block; /* Each option on a new line */
+        margin-bottom: 0.75rem;
+        padding: 0.75rem 1.25rem;
+        border: 1px solid #ddd;
+        border-radius: .25rem;
+        background-color: #fff;
+    }
+    .mcq-option input[type="radio"] { margin-right: 10px; }
+    .mcq-option label { font-weight: normal; cursor: pointer; }
+
+    /* Remarks Styling */
+    #question-remarks {
+        margin-top: 10px;
+        margin-bottom: 15px;
+        padding: 10px;
+        background-color: #fff3cd; /* Light yellow for remarks */
+        border-left: 4px solid #ffeeba;
+        font-style: italic;
+        font-size: 0.95rem;
+    }
+    .split-layout {
+        display: flex;
+        gap: 20px;
+    }
+    .left-panel {
+        flex: 3; /* Takes more space */
+    }
+    .right-panel {
+        flex: 1; /* Takes less space, for QNP */
+        min-width: 200px; /* Ensure QNP has some minimum width */
+        max-width: 300px;
+    }
+    #qnp-container h5 {
+        margin-bottom: 0.5rem;
+        font-size: 1.1rem;
+        color: #333;
+    }
 </style>
 {% endblock %}
 
@@ -70,54 +142,81 @@
 </div>
 
 <div id="test-container" style="display:none;"> <!-- Test container initially hidden -->
-    <!-- Question Title and Progress/Timer -->
-    <div class="d-flex justify-content-between align-items-center mb-1">
-        <h2 id="question-title" class="mb-0">Loading question...</h2>
-        <div class="fw-bold fs-5">
-            Question: <span id="question-progress">? / ?</span> | Timer: <span id="question-timer">00:00</span> | Time Limit: <span id="time-limit" class="text-danger">00:00</span>
+    <div class="split-layout">
+        <div class="left-panel">
+            <!-- Question Title and Progress/Timer -->
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <h2 id="question-title" class="mb-0">Loading question...</h2>
+                <div class="fw-bold fs-5">
+                    Question: <span id="question-progress">? / ?</span> | Timer: <span id="question-timer">00:00</span> | Time Limit: <span id="time-limit" class="text-danger">00:00</span>
+                </div>
+            </div>
+            <!-- Challenge Name Display -->
+            <div class="challenge-header mb-3">Challenge: <span id="current-challenge-name">{{ challenge_name }}</span></div>
+            
+            <!-- Question Metadata (Level, Language) -->
+            <div class="question-meta mb-3">
+                <span><strong>Level:</strong> <span id="question-level">N/A</span></span>
+                <span><strong>Language:</strong> <span id="question-language">N/A</span></span>
+            </div>
+
+            <!-- Overall Test Progress Bar -->
+            <div class="progress mb-3" style="height: 5px;">
+              <div id="test-progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+
+            <!-- Question Description -->
+            <p id="question-description" class="mb-3 question-description">Loading description...</p>
+
+            <!-- Question Remarks (hidden by default, shown if remarks exist) -->
+            <div id="question-remarks-container" style="display:none;">
+                <div id="question-remarks" class="alert alert-info">Loading remarks...</div>
+            </div>
+
+            <!-- SQL Schema Display (hidden by default, shown for SQL questions) -->
+            <div id="sql-schema-container" class="mb-3" style="display:none;">
+                <h5>Database Schema:</h5>
+                <pre id="schema-details" class="schema-details">Loading schema...</pre>
+            </div>
+            
+            <!-- MCQ Options Container (hidden by default, shown for MCQ questions) -->
+            <div id="mcq-options-container" class="mb-3" style="display:none;">
+                <h5>Select your answer:</h5>
+                <!-- Options will be dynamically inserted here by JavaScript -->
+            </div>
+
+            <!-- CodeMirror Editor Container (hidden for MCQ questions) -->
+            <div id="code-editor-container" class="mb-3">
+                <textarea id="code-editor"></textarea> <!-- CodeMirror will attach to this textarea -->
+            </div>
+
+            <!-- Action Buttons (Run Code, Next Question, Finish Test) -->
+            <div class="mb-3 d-flex justify-content-start align-items-center">
+                <button id="run-code-btn" class="btn btn-success me-2">Run Code</button>
+                <button id="prev-question-btn" class="btn btn-outline-secondary me-2">Previous</button>
+                <button id="next-question-btn" class="btn btn-primary">Next</button>
+                <div class="ms-auto"> <!-- Pushes Finish Test button to the right -->
+                     <button id="finish-test-btn" class="btn btn-info" style="display:none;">Finish Test & View Scoreboard</button>
+                </div>
+            </div>
+
+            <!-- Output Area for Code Evaluation Results -->
+            <div id="output-area-container">
+                <h5>Output:</h5>
+                <div id="output-area">
+                    <p class="text-muted">Run your code or submit your answer to see the output here.</p>
+                </div>
+            </div>
         </div>
-    </div>
-    <!-- Challenge Name Display -->
-    <div class="challenge-header mb-3">Challenge: <span id="current-challenge-name">{{ challenge_name }}</span></div>
-    
-    <!-- Question Metadata (Level, Language) -->
-    <div class="question-meta mb-3">
-        <span><strong>Level:</strong> <span id="question-level">N/A</span></span>
-        <span><strong>Language:</strong> <span id="question-language">N/A</span></span>
-    </div>
 
-    <!-- Overall Test Progress Bar -->
-    <div class="progress mb-3" style="height: 5px;">
-      <div id="test-progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
-    </div>
-
-    <!-- Question Description -->
-    <p id="question-description" class="mb-3 question-description">Loading description...</p>
-
-    <!-- SQL Schema Display (hidden by default, shown for SQL questions) -->
-    <div id="sql-schema-container" class="mb-3" style="display:none;">
-        <h5>Database Schema:</h5>
-        <pre id="schema-details" class="schema-details">Loading schema...</pre>
-    </div>
-
-    <!-- CodeMirror Editor Container -->
-    <div id="code-editor-container" class="mb-3">
-        <textarea id="code-editor"></textarea> <!-- CodeMirror will attach to this textarea -->
-    </div>
-
-    <!-- Action Buttons (Run Code, Next Question, Finish Test) -->
-    <div class="mb-3 d-flex justify-content-start">
-        <button id="run-code-btn" class="btn btn-success me-2">Run Code</button>
-        <button id="prev-question-btn" class="btn btn-secondary me-2" style="display:none;">Previous Question</button> <!-- NEW BUTTON -->
-        <button id="next-question-btn" class="btn btn-primary" style="display:none;">Next Question</button>
-        <button id="finish-test-btn" class="btn btn-info" style="display:none;">Finish Test & View Scoreboard</button> <!-- This button's functionality can be expanded if needed -->
-    </div>
-
-    <!-- Output Area for Code Evaluation Results -->
-    <div id="output-area-container">
-        <h5>Output:</h5>
-        <div id="output-area">
-            <p class="text-muted">Run your code to see the output here.</p>
+        <div class="right-panel">
+            <div id="qnp-container">
+                <h5>Question Panel</h5>
+                <div id="question-navigation-panel">
+                    <!-- QNP items will be dynamically inserted here by JavaScript -->
+                    <p class="text-muted">Loading questions...</p>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -128,8 +227,10 @@
     <p>Challenge: <strong id="completed-challenge-name"></strong></p>
     <p>Your final score is: <strong id="final-score">0</strong>.</p>
     <p>Total time taken: <strong id="total-time-taken">0s</strong>.</p>
+    <div class="mt-3" id="final-qnp-summary">
+        <!-- Final QNP summary can be displayed here if desired -->
+    </div>
     <a href="/scoreboards" id="view-challenge-scoreboard-link" class="btn btn-lg btn-primary mt-3">View Challenge Scoreboard</a>
-    {# Form to restart the test, goes to a new user/challenge selection #}
     <form action="{{ url_for('restart_test') }}" method="post" class="d-inline">
          <button type="submit" class="btn btn-lg btn-outline-secondary mt-3 ms-2">Start New Test (New User/Challenge)</button>
     </form>
@@ -139,11 +240,8 @@
 {% block scripts %}
 <script>
     // This constant provides the base URL for listing scoreboards.
-    // The client-side script (script.js) will append the specific challenge_id to this
-    // when constructing the link to a particular challenge's scoreboard.
     const SCOREBOARD_BASE_URL = "{{ url_for('scoreboards_list_page') }}"; 
 </script>
 <!-- Main client-side JavaScript file for test page logic -->
-<!-- This script handles fetching questions, submitting code, updating UI, timers, etc. -->
 <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 {% endblock %}

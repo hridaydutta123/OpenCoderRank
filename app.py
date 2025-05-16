@@ -32,8 +32,14 @@ CHALLENGES = {
     "python_basic_problems": {
         "id": "python_basic_problems",
         "name": "Python Basic Problems", # Consider changing to "Python Basic Problems" for better display
-        "description": "A collection of python basic questions.",
+        "description": "A collection of python basic and theory questions.", # Updated description
     }
+    # Add more challenges here if needed, e.g., for mixed types or pure MCQ
+    # "mcq_theory": {
+    #     "id": "mcq_theory",
+    #     "name": "Theory & Concepts (MCQ)",
+    #     "description": "Test your theoretical knowledge with multiple-choice questions."
+    # }
 }
 
 # --- Database Helper Functions ---
@@ -103,6 +109,15 @@ def execute_db(query, args=()):
     db.commit()
     cur.close()
 
+# Helper function to generate QNP data
+def _get_qnp_data(session_question_ids, session_answers):
+    qnp_data = []
+    for q_id_in_list in session_question_ids:
+        # Ensure q_id_in_list is string for dictionary lookup, as keys in session['answers'] are strings
+        status = session_answers.get(str(q_id_in_list), {}).get('status', 'unattempted')
+        qnp_data.append({'id': q_id_in_list, 'status': status})
+    return qnp_data
+
 # --- Routes ---
 # Define the application's URL endpoints and their corresponding view functions.
 
@@ -135,7 +150,6 @@ def index():
         session['score'] = 0
         session['start_time'] = time.time() # Overall test start time
         session['question_start_time'] = time.time() # Start time for the first question
-        session['answers'] = {} # To store answers and prevent re-scoring correct ones
         
         # Get question IDs for the selected challenge
         challenge_questions_metadata = questions_data.get_all_questions_metadata(challenge_id)
@@ -144,8 +158,12 @@ def index():
         # Check if the selected challenge has any questions
         if not session['question_ids']:
             flask.flash(f"No questions found for challenge '{CHALLENGES[challenge_id]['name']}'. Please select another.", "warning")
+            session.clear() # Ensure session is cleared if no questions
             return render_template('index.html', challenges=CHALLENGES)
 
+        # Initialize answers status for QNP: keys are stringified question IDs
+        session['answers'] = {str(qid): {"status": "unattempted", "attempt_detail": None} for qid in session['question_ids']}
+        
         return redirect(url_for('test_page')) # Redirect to the test interface
     
     # For GET request, render the index page with available challenges
@@ -191,89 +209,152 @@ def get_current_question_api():
     current_idx = session.get('current_question_idx', 0)
     question_ids = session.get('question_ids', [])
     challenge_id = session['challenge_id']
+    
+    # Prepare QNP data based on current answers in session
+    qnp_data = _get_qnp_data(session.get('question_ids', []), session.get('answers', {}))
 
-    # Check if all questions have been answered
-    if current_idx >= len(question_ids) and len(question_ids) > 0 : # Check len > 0 to handle empty challenges properly
-        return jsonify({"test_completed": True, "score": session.get('score', 0)})
-    elif not question_ids: # No questions in this challenge
-         return jsonify({"test_completed": True, "score": session.get('score', 0), "message": "No questions in this challenge."})
-
+    # Check if all questions have been answered or no questions
+    if not question_ids or (current_idx >= len(question_ids) and len(question_ids) > 0) :
+        return jsonify({
+            "test_completed": True, 
+            "score": session.get('score', 0),
+            "qnp_data": qnp_data, # Still send QNP data for final state display
+            "message": "No questions in this challenge." if not question_ids else "Test completed."
+        })
 
     q_id = question_ids[current_idx]
-    # Fetch the full question data using its global ID
     question = questions_data.get_question_by_id(q_id)
 
-    # Validate question exists and belongs to the current challenge
     if not question or question.get('challenge_id') != challenge_id:
-        # This is a defensive check; question_ids should already be filtered by challenge
         return jsonify({"error": "Question not found or not part of this challenge"}), 404
     
-    session['question_start_time'] = time.time() # Reset question start time
+    session['question_start_time'] = time.time()
 
-    # Prepare question data to send to the client (exclude sensitive info like expected output for SQL)
-    client_question = {k: v for k, v in question.items() if k not in ['expected_query_output', 'test_cases', 'challenge_id']}
+    # Prepare client-safe question data
+    client_question = {
+        'id': question['id'],
+        'title': question['title'],
+        'level': question['level'],
+        'language': question['language'],
+        'description': question['description'],
+        'points': question['points'],
+        'time_limit_seconds': question['time_limit_seconds'],
+        'remarks': question.get('remarks') # Add remarks
+    }
+
     if question['language'] == 'python':
-        client_question['starter_code'] = question.get('starter_code', '') # Include starter code for Python
+        client_question['starter_code'] = question.get('starter_code', '')
+    elif question['language'] == 'sql':
+        client_question['schema'] = question.get('schema', '')
+        client_question['starter_query'] = question.get('starter_query', '') # Add starter_query
+    elif question['language'] == 'mcq':
+        client_question['options'] = question.get('options', [])
     
-    # Add metadata for UI display
     client_question['current_q_num'] = current_idx + 1
     client_question['total_questions'] = len(question_ids)
     client_question['user_score'] = session.get('score', 0)
     client_question['challenge_name'] = CHALLENGES.get(challenge_id, {}).get('name', "Unknown Challenge")
+    client_question['qnp_data'] = qnp_data # Add QNP data to response
 
     return jsonify(client_question)
 
 @app.route('/api/evaluate', methods=['POST'])
 def evaluate_code_api():
     """
-    API endpoint to evaluate user-submitted code (SQL or Python).
-    Receives code and question ID, returns evaluation results.
+    API endpoint to evaluate user-submitted code (SQL, Python, or MCQ answer).
+    Receives code/answer and question ID, returns evaluation results including updated QNP data.
     """
     if 'username' not in session or 'challenge_id' not in session:
         return jsonify({"error": "Not authenticated or challenge not selected"}), 401
 
     data = request.get_json()
-    user_code = data.get('code')
-    q_id = data.get('question_id') # This is the global question ID
+    user_submission = data.get('code') # For code; for MCQ, this will be the selected index as a string
+    q_id = data.get('question_id') 
     challenge_id = session['challenge_id']
+    q_id_str = str(q_id) # Use string version for session key
 
-    if not user_code or q_id is None:
-        return jsonify({"error": "Missing code or question_id"}), 400
+    if user_submission is None or q_id is None: # Allow empty string for code, but not None
+        return jsonify({"error": "Missing code/answer or question_id"}), 400
 
-    question = questions_data.get_question_by_id(int(q_id)) # Fetch question by its global ID
-    # Validate question and ensure it's part of the current user's challenge
+    question = questions_data.get_question_by_id(int(q_id))
     if not question or question.get('challenge_id') != challenge_id:
         return jsonify({"error": "Invalid question_id or not part of this challenge"}), 400
     
-    # Prevent re-evaluation if already answered correctly
-    # str(q_id) because session keys are typically strings when coming from JSON or forms
-    if session['answers'].get(str(q_id), {}).get('correct'):
+    # Prevent re-evaluation/scoring if already answered correctly
+    # For MCQs, once answered, it's final (correct or incorrect) for QNP status, but allow re-submission view
+    current_answer_info = session['answers'].get(q_id_str, {})
+    if current_answer_info.get('status') == 'correct':
+        updated_qnp_data = _get_qnp_data(session.get('question_ids', []), session.get('answers', {}))
         return jsonify({
             "status": "already_correct",
             "message": "You have already answered this question correctly.",
-            "output": session['answers'][str(q_id)].get('output', '') # Show previous correct output
+            "output": current_answer_info.get('attempt_detail', ''), # Show previous correct output/detail
+            "qnp_data": updated_qnp_data,
+            "new_score": session.get('score')
         })
 
     result = {"status": "error", "output": "Evaluation failed.", "passed_all_tests": False}
 
-    # Delegate to language-specific evaluation function
     if question['language'] == 'sql':
-        result = evaluate_sql(user_code, question)
+        result = evaluate_sql(user_submission, question)
     elif question['language'] == 'python':
-        result = evaluate_python(user_code, question)
+        result = evaluate_python(user_submission, question)
+    elif question['language'] == 'mcq':
+        result = evaluate_mcq(user_submission, question)
     
-    # Update score and session if evaluation was successful and tests passed
+    # Update score and session answers based on evaluation
     if result.get('passed_all_tests'):
-        session['score'] = session.get('score', 0) + question['points']
-        session['answers'][str(q_id)] = {"correct": True, "output": result.get("output", "")}
-        result['new_score'] = session['score'] # Send updated score back to client
+        if current_answer_info.get('status') != 'correct': # Only add points if not previously correct
+            session['score'] = session.get('score', 0) + question['points']
+        session['answers'][q_id_str] = {"status": "correct", "attempt_detail": result.get("output", "")}
+        result['new_score'] = session['score']
     else:
-        # Record that an attempt was made, even if incorrect
-        session['answers'][str(q_id)] = {"correct": False, "output": result.get("output", "")}
+        # If it was previously correct, don't change status to incorrect. This path usually for first incorrect attempts.
+        if current_answer_info.get('status') != 'correct':
+             session['answers'][q_id_str] = {"status": "incorrect", "attempt_detail": result.get("output", "")}
+        else: # If it was correct, and user resubmits something that is now marked "incorrect" (e.g. they changed code)
+              # We keep the status as "correct" from the first successful attempt for QNP, but show new output.
+              # This behavior can be debated. Current QNP shows first correct state.
+              result['message'] = "Evaluated, but score retained from first correct answer."
 
-    # Flask automatically converts dicts to JSON with jsonify
+    # Prepare updated QNP data to send back for immediate UI update
+    result['qnp_data'] = _get_qnp_data(session.get('question_ids', []), session.get('answers', {}))
+    
     return jsonify(result)
 
+def evaluate_mcq(selected_option_index_str, question_data):
+    """
+    Evaluates a user's MCQ answer.
+    :param selected_option_index_str: The index of the selected option (as a string).
+    :param question_data: Dictionary with question details, including 'options' and 'correct_answer_index'.
+    :return: A dictionary with evaluation status and output message.
+    """
+    try:
+        selected_index = int(selected_option_index_str)
+    except ValueError:
+        return {
+            "status": "error",
+            "output": "<p class='text-danger'>Invalid answer format.</p>",
+            "passed_all_tests": False
+        }
+
+    is_correct = (selected_index == question_data['correct_answer_index'])
+    output_html = ""
+
+    if is_correct:
+        output_html = f"<p class='text-success mt-2'><strong>Status: Correct!</strong></p>"
+    else:
+        correct_option_text = "N/A"
+        if 0 <= question_data['correct_answer_index'] < len(question_data['options']):
+             correct_option_text = question_data['options'][question_data['correct_answer_index']]
+        output_html = f"<p class='text-danger mt-2'><strong>Status: Incorrect.</strong></p>"
+        output_html += f"<p>The correct answer was: '{flask.escape(correct_option_text)}'</p>"
+        
+    return {
+        "status": "correct" if is_correct else "incorrect",
+        "output": output_html,
+        "passed_all_tests": is_correct
+    }
 
 def evaluate_sql(user_query, question_data):
     """
@@ -344,125 +425,21 @@ def evaluate_sql(user_query, question_data):
     }
 
 
-def evaluate_python(user_code, question_data):
-    """
-    Evaluates a user's Python code by running it against predefined test cases.
-    Writes the user's code and a test harness to a temporary file,
-    then executes it using a subprocess with a timeout.
-    :param user_code: The Python code submitted by the user.
-    :param question_data: Dictionary with question details, including 'test_cases'.
-    :return: A dictionary with evaluation status, HTML output of test results, and overall success.
-    """
-    results_html = "" # HTML representation of test case results
-    all_tests_passed = True # Flag to track if all test cases pass
-    overall_status_message = ""
+@app.route('/api/jump_to_question', methods=['POST'])
+def jump_to_question_api():
+    if 'username' not in session or 'challenge_id' not in session:
+        return jsonify({"error": "Not authenticated"}), 401
     
-    # Create a temporary file for the user's code + test harness.
-    # This provides a basic form of isolation. More advanced sandboxing would use Docker or similar.
-    with tempfile.NamedTemporaryFile(mode="w+", suffix=".py", delete=False) as tmp_code_file:
-        # Write necessary imports (if any specific are allowed/needed by the harness)
-        tmp_code_file.write("import sys\n")
-        tmp_code_file.write("import json\n\n")
-        
-        # Write the user's code
-        tmp_code_file.write(user_code + "\n\n")
+    data = request.get_json()
+    target_idx = data.get('index')
+    question_ids = session.get('question_ids', [])
 
-        # Dynamically generate and write the test harness code
-        # This harness will call the user's function with test case inputs
-        # and capture results, then print them as JSON.
-        harness_code = "def run_tests():\n"
-        harness_code += "    results = []\n"
-        # Attempt to extract the function name from the user's code (simplistic extraction)
-        # Assumes standard `def function_name(...):` format.
-        # More robust parsing might be needed for complex scenarios.
-        match = re.search(r"def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(", user_code)
-        if not match: # Fallback or error if function name cannot be determined
-            # This situation should ideally be handled more gracefully,
-            # e.g., by returning an error to the user.
-            # For now, it might lead to runtime errors in the subprocess.
-            func_name = "user_function" # Placeholder, likely to fail if user named it differently
-        else:
-            func_name = match.group(1)
-
-        for i, test_case in enumerate(question_data["test_cases"]):
-            input_args_str = ", ".join(map(repr, test_case["input_args"])) # Format input arguments for the call
-            harness_code += f"    try:\n"
-            # Call the extracted function name with the test case's input arguments
-            harness_code += f"        actual = {func_name}({input_args_str})\n"
-            # Compare actual output with expected output
-            harness_code += f"        passed_check = actual == {repr(test_case['expected_output'])}\n"
-            harness_code += f"        results.append({{'name': '{test_case.get('name', f'Test {i+1}')}', 'input': {test_case['input_args']}, 'expected': {repr(test_case['expected_output'])}, 'actual': actual, 'passed': passed_check, 'error': None}})\n"
-            harness_code += f"    except Exception as e_test:\n" # Catch errors during test execution
-            harness_code += f"        results.append({{'name': '{test_case.get('name', f'Test {i+1}')}', 'input': {test_case['input_args']}, 'expected': {repr(test_case['expected_output'])}, 'actual': None, 'passed': False, 'error': str(e_test)}})\n"
-        
-        harness_code += "    print(json.dumps(results))\n\n" # Output results as JSON string
-        harness_code += "run_tests()\n" # Execute the test runner function
-        
-        tmp_code_file.write(harness_code)
-        tmp_file_name = tmp_code_file.name # Get the name of the temporary file
-
-    python_executable = sys.executable # Use the same Python interpreter that runs the Flask app
-    try:
-        # Execute the temporary file in a subprocess
-        # Timeout is crucial for preventing infinite loops or very long computations.
-        # Resource limits (memory, CPU) are harder to enforce cross-platform without extra libraries or Docker.
-        process = subprocess.run(
-            [python_executable, tmp_file_name],
-            capture_output=True, # Capture stdout and stderr
-            text=True,           # Decode output as text
-            timeout=5            # 5-second timeout for execution
-        )
-
-        if process.returncode == 0: # Successful execution of the script
-            try:
-                test_results = json.loads(process.stdout) # Parse JSON output from the harness
-                results_html += "<ul class='list-group'>"
-                for res in test_results:
-                    status_icon = "✅" if res['passed'] else "❌"
-                    status_class = "text-success" if res['passed'] else "text-danger"
-                    results_html += f"<li class='list-group-item'>"
-                    results_html += f"<strong>{res['name']}:</strong> {status_icon} <span class='{status_class}'>"
-                    results_html += "Passed" if res['passed'] else "Failed"
-                    results_html += "</span><br>"
-                    results_html += f"<small>Input: <code>{res['input']}</code>, Expected: <code>{res['expected']}</code>, Got: <code>{res['actual'] if not res['error'] else 'Error'}</code></small>"
-                    if res['error']:
-                         results_html += f"<br><small class='text-danger'>Error during this test: {res['error']}</small>"
-                    results_html += "</li>"
-                    if not res['passed']:
-                        all_tests_passed = False
-                results_html += "</ul>"
-
-            except json.JSONDecodeError:
-                results_html = "<p class='text-danger'>Error: Could not parse test output from script.</p>"
-                results_html += f"<pre>Script STDOUT:\n{process.stdout}</pre>" # Show raw output for debugging
-                all_tests_passed = False
-        else: # Script execution failed (non-zero return code)
-            results_html = f"<p class='text-danger'>Error during code execution (Return Code: {process.returncode}):</p>"
-            # Show stderr if available, otherwise stdout, for error diagnosis
-            error_output = process.stderr if process.stderr else process.stdout
-            results_html += f"<pre>{error_output}</pre>" 
-            all_tests_passed = False
-
-    except subprocess.TimeoutExpired:
-        results_html = "<p class='text-danger'>Error: Code execution timed out (max 5 seconds).</p>"
-        all_tests_passed = False
-    except Exception as e_outer: # Catch other potential errors in this evaluation function
-        results_html = f"<p class='text-danger'>An unexpected error occurred during evaluation: {e_outer}</p>"
-        all_tests_passed = False
-    finally:
-        os.remove(tmp_file_name) # Clean up (delete) the temporary file
-
-    # Set overall status message based on test results
-    if all_tests_passed:
-        overall_status_message = "<p class='text-success mt-2'><strong>All tests passed!</strong></p>"
-    else:
-        overall_status_message = "<p class='text-danger mt-2'><strong>Some tests failed.</strong></p>"
+    if target_idx is None or not (0 <= target_idx < len(question_ids)):
+        return jsonify({"jumped": False, "message": "Invalid question index."}), 400
     
-    return {
-        "status": "success" if all_tests_passed else "failed_tests",
-        "output": overall_status_message + results_html, # Combine status message and detailed results
-        "passed_all_tests": all_tests_passed
-    }
+    session['current_question_idx'] = target_idx
+    session['question_start_time'] = time.time() # Reset timer for the jumped-to question
+    return jsonify({"jumped": True, "new_idx": target_idx})
 
 
 @app.route('/api/previous_question', methods=['POST'])
@@ -479,10 +456,9 @@ def previous_question_api():
     if current_idx > 0:
         current_idx -= 1
         session['current_question_idx'] = current_idx
-        session['question_start_time'] = time.time() # Reset start time for the new question
-        return jsonify({"navigated": True})
+        session['question_start_time'] = time.time() 
+        return jsonify({"navigated": True, "new_idx": current_idx})
     else:
-        # Already at the first question or invalid state
         return jsonify({"navigated": False, "message": "Already at the first question."})
 
 
@@ -498,26 +474,29 @@ def next_question_api():
 
     current_idx = session.get('current_question_idx', 0)
     question_ids = session.get('question_ids', [])
-    challenge_id = session['challenge_id'] # Get current challenge ID from session
+    challenge_id = session['challenge_id'] 
     
-    current_idx += 1 # Move to the next question index
+    current_idx += 1 
     session['current_question_idx'] = current_idx
 
-    if current_idx >= len(question_ids): # All questions attempted
+    if current_idx >= len(question_ids): 
         total_time_taken = time.time() - session['start_time']
-        # Save score to the database
-        # The challenge_id is now correctly included in the scoreboard entry
         execute_db("INSERT INTO scoreboard (username, challenge_id, score, time_taken_seconds) VALUES (?, ?, ?, ?)",
                    (session['username'], challenge_id, session['score'], round(total_time_taken)))
+        
+        # Prepare QNP data for the completion screen as well
+        qnp_data = _get_qnp_data(session.get('question_ids', []), session.get('answers', {}))
+
         return jsonify({
             "test_completed": True, 
             "score": session['score'], 
             "total_time": round(total_time_taken),
-            "challenge_id": challenge_id # Pass challenge_id for constructing scoreboard link on client
+            "challenge_id": challenge_id,
+            "qnp_data": qnp_data # Send final QNP state
         })
-    else: # There are more questions
-        session['question_start_time'] = time.time() # Reset start time for the new question
-        return jsonify({"test_completed": False, "next_question_loaded": True})
+    else: 
+        session['question_start_time'] = time.time() 
+        return jsonify({"test_completed": False, "next_question_loaded": True, "new_idx": current_idx})
 
 @app.route('/scoreboards')
 def scoreboards_list_page():
@@ -532,13 +511,11 @@ def scoreboard_page(challenge_id):
     Displays the scoreboard for a specific challenge.
     Fetches scores from the database for the given challenge_id.
     """
-    # Validate that the requested challenge_id is valid
     if challenge_id not in CHALLENGES:
         flask.flash("Invalid challenge selected for scoreboard.", "error")
-        return redirect(url_for('scoreboards_list_page')) # Redirect if challenge ID is unknown
+        return redirect(url_for('scoreboards_list_page')) 
     
-    challenge = CHALLENGES[challenge_id] # Get challenge details
-    # Query database for scores related to this challenge_id
+    challenge = CHALLENGES[challenge_id] 
     scores = query_db("SELECT username, score, time_taken_seconds, timestamp FROM scoreboard WHERE challenge_id = ? ORDER BY score DESC, time_taken_seconds ASC LIMIT 20", (challenge_id,))
     return render_template('scoreboard.html', scores=scores, challenge=challenge)
 
@@ -549,7 +526,7 @@ def restart_test():
     Allows the user to restart the test process.
     Clears the session, redirecting the user to the homepage to select a new challenge/name.
     """
-    session.clear() # Clear all session data
+    session.clear() 
     flask.flash("Test restarted. Please select a challenge and enter your name.", "info")
     return redirect(url_for('index'))
 
@@ -561,25 +538,16 @@ def initdb_command():
     Initializes the database by calling the init_db() function.
     """
     init_db()
-    # print("Initialized the database.") # This is already printed within init_db()
 
 # --- Main execution block ---
 if __name__ == '__main__':
-    # This block runs when the script is executed directly (e.g., `python app.py`)
-
-    # Construct the full path to schema.sql, assuming it's in the same directory as app.py
     schema_full_path = os.path.join(os.path.dirname(__file__), SCHEMA_FILE)
-
-    # --- Initial Database Setup (if database file doesn't exist) ---
-    # This is a convenience for development. For production, `flask initdb` is preferred.
     if not os.path.exists(DATABASE):
         print(f"Database {DATABASE} not found. Attempting to initialize...")
         if not os.path.exists(schema_full_path):
             print(f"CRITICAL ERROR: {SCHEMA_FILE} not found at {schema_full_path}. Database cannot be created automatically.", file=sys.stderr)
             print(f"Please create '{SCHEMA_FILE}' or run 'flask initdb' if Flask is installed and '{SCHEMA_FILE}' exists.", file=sys.stderr)
-            sys.exit(1) # Critical error, cannot proceed without schema
-        
-        # Manually connect and initialize DB (outside app context, for first-time setup)
+            sys.exit(1) 
         try:
             db_conn = sqlite3.connect(DATABASE)
             with open(schema_full_path, mode='r') as f:
@@ -589,10 +557,6 @@ if __name__ == '__main__':
             print(f"Database {DATABASE} created and schema from {SCHEMA_FILE} initialized successfully.")
         except Exception as e:
             print(f"Error initializing database directly: {e}", file=sys.stderr)
-            sys.exit(1) # Exit if automatic DB creation fails
+            sys.exit(1) 
             
-    # Run the Flask development server
-    # debug=True enables reloader and debugger; should be False in production.
-    # host='0.0.0.0' makes the server accessible from any network interface.
-    # port='5555' sets the port number.
     app.run(debug=True, host='0.0.0.0', port='5555')
