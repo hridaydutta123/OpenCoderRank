@@ -214,7 +214,7 @@ def get_current_question_api():
     qnp_data = _get_qnp_data(session.get('question_ids', []), session.get('answers', {}))
 
     # Check if all questions have been answered or no questions
-    if not question_ids or (current_idx >= len(question_ids) and len(question_ids) > 0) :
+    if not question_ids or (current_idx >= len(question_ids) > 0) :
         return jsonify({
             "test_completed": True, 
             "score": session.get('score', 0),
@@ -425,6 +425,126 @@ def evaluate_sql(user_query, question_data):
     }
 
 
+def evaluate_python(user_code, question_data):
+    """
+    Evaluates a user's Python code by running it against predefined test cases.
+    Writes the user's code and a test harness to a temporary file,
+    then executes it using a subprocess with a timeout.
+    :param user_code: The Python code submitted by the user.
+    :param question_data: Dictionary with question details, including 'test_cases'.
+    :return: A dictionary with evaluation status, HTML output of test results, and overall success.
+    """
+    results_html = ""  # HTML representation of test case results
+    all_tests_passed = True  # Flag to track if all test cases pass
+    overall_status_message = ""
+
+    # Create a temporary file for the user's code + test harness.
+    # This provides a basic form of isolation. More advanced sandboxing would use Docker or similar.
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".py", delete=False) as tmp_code_file:
+        # Write necessary imports (if any specific are allowed/needed by the harness)
+        tmp_code_file.write("import sys\n")
+        tmp_code_file.write("import json\n\n")
+
+        # Write the user's code
+        tmp_code_file.write(user_code + "\n\n")
+
+        # Dynamically generate and write the test harness code
+        # This harness will call the user's function with test case inputs
+        # and capture results, then print them as JSON.
+        harness_code = "def run_tests():\n"
+        harness_code += "    results = []\n"
+        # Attempt to extract the function name from the user's code (simplistic extraction)
+        # Assumes standard `def function_name(...):` format.
+        # More robust parsing might be needed for complex scenarios.
+        match = re.search(r"def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(", user_code)
+        if not match:  # Fallback or error if function name cannot be determined
+            # This situation should ideally be handled more gracefully,
+            # e.g., by returning an error to the user.
+            # For now, it might lead to runtime errors in the subprocess.
+            func_name = "user_function"  # Placeholder, likely to fail if user named it differently
+        else:
+            func_name = match.group(1)
+
+        for i, test_case in enumerate(question_data["test_cases"]):
+            input_args_str = ", ".join(map(repr, test_case["input_args"]))  # Format input arguments for the call
+            harness_code += f"    try:\n"
+            # Call the extracted function name with the test case's input arguments
+            harness_code += f"        actual = {func_name}({input_args_str})\n"
+            # Compare actual output with expected output
+            harness_code += f"        passed_check = actual == {repr(test_case['expected_output'])}\n"
+            harness_code += f"        results.append({{'name': '{test_case.get('name', f'Test {i + 1}')}', 'input': {test_case['input_args']}, 'expected': {repr(test_case['expected_output'])}, 'actual': actual, 'passed': passed_check, 'error': None}})\n"
+            harness_code += f"    except Exception as e_test:\n"  # Catch errors during test execution
+            harness_code += f"        results.append({{'name': '{test_case.get('name', f'Test {i + 1}')}', 'input': {test_case['input_args']}, 'expected': {repr(test_case['expected_output'])}, 'actual': None, 'passed': False, 'error': str(e_test)}})\n"
+
+        harness_code += "    print(json.dumps(results))\n\n"  # Output results as JSON string
+        harness_code += "run_tests()\n"  # Execute the test runner function
+
+        tmp_code_file.write(harness_code)
+        tmp_file_name = tmp_code_file.name  # Get the name of the temporary file
+
+    python_executable = sys.executable  # Use the same Python interpreter that runs the Flask app
+    try:
+        # Execute the temporary file in a subprocess
+        # Timeout is crucial for preventing infinite loops or very long computations.
+        # Resource limits (memory, CPU) are harder to enforce cross-platform without extra libraries or Docker.
+        process = subprocess.run(
+            [python_executable, tmp_file_name],
+            capture_output=True,  # Capture stdout and stderr
+            text=True,  # Decode output as text
+            timeout=5  # 5-second timeout for execution
+        )
+
+        if process.returncode == 0:  # Successful execution of the script
+            try:
+                test_results = json.loads(process.stdout)  # Parse JSON output from the harness
+                results_html += "<ul class='list-group'>"
+                for res in test_results:
+                    status_icon = "✅" if res['passed'] else "❌"
+                    status_class = "text-success" if res['passed'] else "text-danger"
+                    results_html += f"<li class='list-group-item'>"
+                    results_html += f"<strong>{res['name']}:</strong> {status_icon} <span class='{status_class}'>"
+                    results_html += "Passed" if res['passed'] else "Failed"
+                    results_html += "</span><br>"
+                    results_html += f"<small>Input: <code>{res['input']}</code>, Expected: <code>{res['expected']}</code>, Got: <code>{res['actual'] if not res['error'] else 'Error'}</code></small>"
+                    if res['error']:
+                        results_html += f"<br><small class='text-danger'>Error during this test: {res['error']}</small>"
+                    results_html += "</li>"
+                    if not res['passed']:
+                        all_tests_passed = False
+                results_html += "</ul>"
+
+            except json.JSONDecodeError:
+                results_html = "<p class='text-danger'>Error: Could not parse test output from script.</p>"
+                results_html += f"<pre>Script STDOUT:\n{process.stdout}</pre>"  # Show raw output for debugging
+                all_tests_passed = False
+        else:  # Script execution failed (non-zero return code)
+            results_html = f"<p class='text-danger'>Error during code execution (Return Code: {process.returncode}):</p>"
+            # Show stderr if available, otherwise stdout, for error diagnosis
+            error_output = process.stderr if process.stderr else process.stdout
+            results_html += f"<pre>{error_output}</pre>"
+            all_tests_passed = False
+
+    except subprocess.TimeoutExpired:
+        results_html = "<p class='text-danger'>Error: Code execution timed out (max 5 seconds).</p>"
+        all_tests_passed = False
+    except Exception as e_outer:  # Catch other potential errors in this evaluation function
+        results_html = f"<p class='text-danger'>An unexpected error occurred during evaluation: {e_outer}</p>"
+        all_tests_passed = False
+    finally:
+        os.remove(tmp_file_name)  # Clean up (delete) the temporary file
+
+    # Set overall status message based on test results
+    if all_tests_passed:
+        overall_status_message = "<p class='text-success mt-2'><strong>All tests passed!</strong></p>"
+    else:
+        overall_status_message = "<p class='text-danger mt-2'><strong>Some tests failed.</strong></p>"
+
+    return {
+        "status": "success" if all_tests_passed else "failed_tests",
+        "output": overall_status_message + results_html,  # Combine status message and detailed results
+        "passed_all_tests": all_tests_passed
+    }
+
 @app.route('/api/jump_to_question', methods=['POST'])
 def jump_to_question_api():
     if 'username' not in session or 'challenge_id' not in session:
@@ -559,4 +679,4 @@ if __name__ == '__main__':
             print(f"Error initializing database directly: {e}", file=sys.stderr)
             sys.exit(1) 
             
-    app.run(debug=True, host='0.0.0.0', port='5555')
+    app.run(debug=True, host='0.0.0.0', port=5555)
