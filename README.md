@@ -10,17 +10,25 @@ OpenCoderRank is a lightweight yet powerful web platform tailored for rapid depl
 ![Demo](OpenCoderRank.gif)
 ## ✨ Features
 
-*   **Multi-language Support:** Currently supports SQL (SQLite dialect) and Python 3 challenges.
-*   **Challenge-based Testing:** Group questions into distinct challenges (e.g., "SQL Basics", "Python Advanced Problems").
-*   **Dynamic Question Loading:** Questions are fetched asynchronously for a smooth user experience on the test page.
+*   **Multi-language & Type Support:** Currently supports SQL (SQLite dialect), Python 3, and Multiple Choice Question (MCQ) challenges.
+*   **Question Variety:**
+    *   Standard SQL and Python coding problems.
+    *   SQL "Fix the Query" tasks where users debug/correct provided SQL.
+    *   Theory-based MCQs with options.
+*   **Challenge-based Testing:** Group questions into distinct challenges (e.g., "SQL Basics", "Python Advanced Problems", "Theory Concepts").
+*   **Interactive Test Interface:**
+    *   **Dynamic Question Loading:** Questions are fetched asynchronously for a smooth user experience.
+    *   **Question Navigation Panel (QNP):** Visual panel showing question numbers, color-coded by status (Correct, Incorrect, Unattempted). Allows users to jump to any question.
+    *   **Question Remarks:** Display optional hints or context (e.g., "Asked in Google 2025 interview") for each question.
 *   **Paste Prevention:** Code editor disables pasting to encourage original problem-solving during assessments.
-*   **Code Evaluation:**
-    *   **SQL:** Executes user queries against a predefined schema and compares the output with the expected result set.
+*   **Code & Answer Evaluation:**
+    *   **SQL:** Executes user queries against a predefined schema and compares the output with the expected result set. Handles standard and "fix the query" types.
     *   **Python:** Runs user-submitted Python functions against a series of test cases in a basic sandboxed environment (using `subprocess`).
-*   **Session Management:** Tracks candidate's name, selected challenge, current question, score, and test timing.
+    *   **MCQ:** Compares user's selected option against the correct answer.
+*   **Session Management:** Tracks candidate's name, selected challenge, current question, score, answers, question statuses, and test timing.
 *   **Scoreboard:** Displays top scores for each challenge, ranked by score and then by time taken.
 *   **Easy Setup:** Minimal dependencies (Flask and Python).
-*   **Customizable:** Easily add new questions and challenges by modifying Python data structures.
+*   **Customizable:** Easily add new questions (including MCQs, SQL fix-it) and challenges by modifying Python data structures. Add remarks to questions.
 *   **User-Friendly Interface:** Built with Bootstrap for a responsive design and CodeMirror for an enhanced code editing experience with syntax highlighting.
 *   **CLI for DB Initialization:** Includes a Flask CLI command to set up the database schema.
 *   **Full-Screen Enforcement:** The platform runs only in full-screen mode to minimize distractions and prevent task-switching.
