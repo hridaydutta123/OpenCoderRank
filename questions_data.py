@@ -125,7 +125,7 @@ INSERT INTO Customers (CustomerID, CustomerName, Country) VALUES (3, 'Great Lake
     },
     # ... (other existing SQL questions remain, can add remarks to them if needed)
     {
-        "id": 18, # Assuming this was the last SQL question from your snippet
+        "id": 18,  # Assuming this was the last SQL question from your snippet
         "challenge_id": "sql_basics",
         "title": "Full List of Orders and Customers",
         "level": "Hard",
@@ -155,7 +155,7 @@ INSERT INTO Customers (CustomerID, CustomerName, Country) VALUES (3, 'Great Lake
         "level": "Medium",
         "language": "sql",
         "description": "The following query attempts to select product names that cost more than 50, but it has a syntax error and a logical error regarding the price. Fix it to show products with Price > 50.",
-        "starter_query": "SELECT ProductName, Price FROM Prodcts WHERE Price > '50';", # Intentional errors
+        "starter_query": "SELECT ProductName, Price FROM Prodcts WHERE Price > '50';",  # Intentional errors
         "schema": """
 CREATE TABLE Products (
     ProductID INT PRIMARY KEY,
@@ -176,7 +176,7 @@ INSERT INTO Products (ProductID, ProductName, Price) VALUES (5, 'Ikura', 31.00);
     # New Multiple Choice Questions (MCQs)
     {
         "id": 20,
-        "challenge_id": "python_basic_problems", # Or create a new challenge for theory
+        "challenge_id": "python_basic_problems",  # Or create a new challenge for theory
         "title": "Python Variable Scope",
         "level": "Easy",
         "language": "mcq",
@@ -211,7 +211,7 @@ INSERT INTO Products (ProductID, ProductName, Price) VALUES (5, 'Ikura', 31.00);
         "remarks": "Core database concept. Frequently appears in SQL theory questions."
     },
     {
-        "id": 22, # Example Python question with remarks
+        "id": 22,  # Example Python question with remarks
         "challenge_id": "python_basic_problems",
         "title": "Sum of Two Numbers",
         "level": "Easy",
@@ -226,7 +226,24 @@ INSERT INTO Products (ProductID, ProductName, Price) VALUES (5, 'Ikura', 31.00);
         "points": 10,
         "time_limit_seconds": 180,
         "remarks": "A very basic Python coding warm-up. Good for checking syntax understanding."
-    }
+    },
+    {
+        "id": 23,
+        "challenge_id": "java_intro",
+        "title": "Sum of Two Numbers",
+        "level": "Easy",
+        "language": "java",
+        "description": "Write a Java function `sum_two(a, b)` that returns the sum of two numbers.",
+        "starter_code": "public class Solution{\n\tpublic int solve(int a,int b){\n\t\t// Write Code here\n\t\treturn 0;\n\t}\n}",
+        "test_cases": [
+            {"input_args": [1, 2], "expected_output": 3, "name": "Positive numbers"},
+            {"input_args": [-1, 1], "expected_output": 0, "name": "Negative and positive"},
+            {"input_args": [0, 0], "expected_output": 0, "name": "Zeros"},
+        ],
+        "points": 10,
+        "time_limit_seconds": 180,
+        "remarks": "A very basic Java coding warm-up. Good for checking syntax understanding."
+    },
     # Ensure ID 6 from README example is distinct or updated. Assuming original question ID 6 (Sum of two numbers) might be like the one above.
     # Let's assume there was a Python challenge "python_advanced_problems".
     # If we used that ID 6 earlier in description for python sum. Let's make it ID 22 in the actual list.
@@ -243,7 +260,8 @@ def get_question_by_id(q_id):
     for q in QUESTIONS:
         if q['id'] == q_id:
             return q
-    return None # Return None if no question with the given ID is found
+    return None  # Return None if no question with the given ID is found
+
 
 def get_all_questions_metadata(challenge_id_filter):
     """
@@ -256,7 +274,8 @@ def get_all_questions_metadata(challenge_id_filter):
     # Filter questions that belong to the specified challenge_id_filter
     challenge_questions = [q for q in QUESTIONS if q.get("challenge_id") == challenge_id_filter]
     # Return a simplified list containing only essential metadata for each question
-    return [{"id": q["id"], "time_limit_seconds": q["time_limit_seconds"], "title": q["title"]} for q in challenge_questions]
+    return [{"id": q["id"], "time_limit_seconds": q["time_limit_seconds"], "title": q["title"]} for q in
+            challenge_questions]
 
 # Note: The function `get_all_questions_metadata` is designed to filter by challenge.
 # If a function to get *all* questions (irrespective of challenge) metadata were needed,
