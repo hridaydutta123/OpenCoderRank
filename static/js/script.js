@@ -17,7 +17,7 @@ let questionPanelData = [];
 
 
 // --- Initialization ---
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     // Initialize CodeMirror if the editor element exists
     const editorElement = document.getElementById('code-editor');
     if (editorElement) {
@@ -29,17 +29,20 @@ document.addEventListener('DOMContentLoaded', function() {
             autoCloseBrackets: true,
             extraKeys: {"Ctrl-Space": "autocomplete"},
             // Disable pasting by default
-            onbeforepaste: function(cm, e) { e.preventDefault(); alert("Pasting code is disabled for this assessment."); }
+            onbeforepaste: function (cm, e) {
+                e.preventDefault();
+                alert("Pasting code is disabled for this assessment.");
+            }
         });
     }
-    
+
     // Attach event listeners to buttons
     const runCodeBtn = document.getElementById('run-code-btn');
     if (runCodeBtn) runCodeBtn.addEventListener('click', runCode);
 
     const nextQuestionBtn = document.getElementById('next-question-btn');
     if (nextQuestionBtn) nextQuestionBtn.addEventListener('click', nextQuestion);
-    
+
     const prevQuestionBtn = document.getElementById('prev-question-btn');
     if (prevQuestionBtn) prevQuestionBtn.addEventListener('click', previousQuestion);
 
@@ -47,14 +50,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (finishTestBtn) finishTestBtn.addEventListener('click', finishTest);
 
     const enterFullscreenBtn = document.getElementById('enter-fullscreen-btn');
-    if(enterFullscreenBtn) enterFullscreenBtn.addEventListener('click', setupFullscreen);
+    if (enterFullscreenBtn) enterFullscreenBtn.addEventListener('click', setupFullscreen);
 
     // Initial fetch of the first question if on test page
     if (document.getElementById('test-container')) {
         // The test container is initially hidden until fullscreen is entered
         // fetchQuestion(); // Moved to setupFullscreen
     }
-    
+
     // Fullscreen change listener
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
@@ -81,7 +84,7 @@ function setupFullscreen() {
 function handleFullscreenChange() {
     if (!document.fullscreenElement && !document.webkitIsFullScreen && !document.mozFullScreen && !document.msFullscreenElement) {
         // Exited fullscreen
-        if (document.getElementById('test-container').style.display === 'block' && 
+        if (document.getElementById('test-container').style.display === 'block' &&
             !document.getElementById('test-completed-message').style.display === 'block') {
             // If test is ongoing and not completed
             document.getElementById('test-container').style.display = 'none';
@@ -108,7 +111,7 @@ function startQuestionTimer(timeLimitSeconds) {
     questionTimerInterval = setInterval(() => {
         const now = Math.floor(Date.now() / 1000);
         const elapsedSeconds = now - currentQuestionStartTime;
-        
+
         const minutes = Math.floor(elapsedSeconds / 60);
         const seconds = elapsedSeconds % 60;
         if (timerDisplay) timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
@@ -141,7 +144,7 @@ function fetchQuestion() {
                 questionPanelData = data.qnp_data || [];
                 updateQuestionNavigationPanel();
                 totalQuestionsInChallenge = data.total_questions;
-                currentQuestionIndex = data.current_q_num -1; // Server sends 1-based, JS uses 0-based
+                currentQuestionIndex = data.current_q_num - 1; // Server sends 1-based, JS uses 0-based
             }
         })
         .catch(error => {
@@ -171,53 +174,53 @@ function runCode() {
 
     fetch('/api/evaluate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: submissionData, question_id: currentQuestionData.id })
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({code: submissionData, question_id: currentQuestionData.id})
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            alert(`Evaluation Error: ${data.error}`);
-            document.getElementById('output-area').innerHTML = `<p class="text-danger">${data.error}</p>`;
-        } else {
-            document.getElementById('output-area').innerHTML = data.output || '<p class="text-muted">No output received.</p>';
-            if (data.new_score !== undefined) {
-                document.getElementById('nav-score').textContent = `Score: ${data.new_score}`;
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(`Evaluation Error: ${data.error}`);
+                document.getElementById('output-area').innerHTML = `<p class="text-danger">${data.error}</p>`;
+            } else {
+                document.getElementById('output-area').innerHTML = data.output || '<p class="text-muted">No output received.</p>';
+                if (data.new_score !== undefined) {
+                    document.getElementById('nav-score').textContent = `Score: ${data.new_score}`;
+                }
+                // Update QNP with data from evaluation response
+                if (data.qnp_data) {
+                    questionPanelData = data.qnp_data;
+                    updateQuestionNavigationPanel();
+                }
             }
-            // Update QNP with data from evaluation response
-            if (data.qnp_data) {
-                questionPanelData = data.qnp_data;
-                updateQuestionNavigationPanel();
-            }
-        }
-    })
-    .catch(error => {
-        console.error('Error evaluating code:', error);
-        document.getElementById('output-area').innerHTML = '<p class="text-danger">An unexpected error occurred during evaluation.</p>';
-    })
-    .finally(() => {
-        runCodeBtn.disabled = false;
-        runCodeBtn.textContent = currentQuestionData.language === 'mcq' ? 'Submit Answer' : 'Run Code';
-    });
+        })
+        .catch(error => {
+            console.error('Error evaluating code:', error);
+            document.getElementById('output-area').innerHTML = '<p class="text-danger">An unexpected error occurred during evaluation.</p>';
+        })
+        .finally(() => {
+            runCodeBtn.disabled = false;
+            runCodeBtn.textContent = currentQuestionData.language === 'mcq' ? 'Submit Answer' : 'Run Code';
+        });
 }
 
 function navigateViaApi(endpoint, successCallback) {
-    fetch(endpoint, { method: 'POST' })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            alert(data.error);
-        } else if (data.test_completed) {
-            handleTestCompletion(data);
-        } else if (data.navigated || data.next_question_loaded || data.jumped) {
-            currentQuestionIndex = data.new_idx; // Server returns new index
-            fetchQuestion(); // Fetch the new current question
-            if(successCallback) successCallback();
-        } else {
-            alert(data.message || "Could not navigate.");
-        }
-    })
-    .catch(error => console.error('Navigation error:', error));
+    fetch(endpoint, {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+            } else if (data.test_completed) {
+                handleTestCompletion(data);
+            } else if (data.navigated || data.next_question_loaded || data.jumped) {
+                currentQuestionIndex = data.new_idx; // Server returns new index
+                fetchQuestion(); // Fetch the new current question
+                if (successCallback) successCallback();
+            } else {
+                alert(data.message || "Could not navigate.");
+            }
+        })
+        .catch(error => console.error('Navigation error:', error));
 }
 
 function previousQuestion() {
@@ -237,18 +240,18 @@ function jumpToQuestion(qSessionIndex) {
     fetch('/api/jump_to_question', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ index: qSessionIndex })
+        body: JSON.stringify({index: qSessionIndex})
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.jumped) {
-            currentQuestionIndex = data.new_idx;
-            fetchQuestion();
-        } else {
-            alert(data.message || "Failed to jump to question.");
-        }
-    })
-    .catch(error => console.error('Error jumping to question:', error));
+        .then(response => response.json())
+        .then(data => {
+            if (data.jumped) {
+                currentQuestionIndex = data.new_idx;
+                fetchQuestion();
+            } else {
+                alert(data.message || "Failed to jump to question.");
+            }
+        })
+        .catch(error => console.error('Error jumping to question:', error));
 }
 
 function finishTest() {
@@ -262,34 +265,34 @@ function finishTest() {
         // If not last, user chose to finish early.
         // To *actually* submit the score as is:
         fetch('/api/next_question', { // Call next_question to force submission even if not last
-             method: 'POST',
-             // Send a flag to indicate forced finish, or have server treat any call to next_question beyond last as finish
-             // For simplicity, let's assume the current next_question logic for `current_idx >= len(question_ids)`
-             // will be triggered if we artificially set currentQuestionIndex to be len(question_ids)
-             // This requires sending the current state and forcing session update.
-             // The existing POST to /api/next_question relies on session's current_question_idx.
-             // A more direct way:
+            method: 'POST',
+            // Send a flag to indicate forced finish, or have server treat any call to next_question beyond last as finish
+            // For simplicity, let's assume the current next_question logic for `current_idx >= len(question_ids)`
+            // will be triggered if we artificially set currentQuestionIndex to be len(question_ids)
+            // This requires sending the current state and forcing session update.
+            // The existing POST to /api/next_question relies on session's current_question_idx.
+            // A more direct way:
         })
-        .then(res => res.json())
-        .then(data => {
-            if (data.test_completed) {
-                handleTestCompletion(data);
-            } else {
-                // This scenario (not completed after finish click) should ideally not happen if server is robust.
-                // Potentially show an error or force redirect.
-                alert("Finishing... If not redirected, please wait or refresh.");
-                // To force submission, an actual /api/finalize_test would be cleaner.
-                // For now, let's make it call nextQuestion until it is completed.
-                // This is a bit of a hack. A dedicated API endpoint would be better.
-                // Let's assume the existing "Next Question" handles test completion properly.
-                // If user clicks Finish when on Q3 of 10, they forfeit remaining.
-                // The current /api/next_question, if it knows it's the *last* action:
-                // Server's /api/next_question, if current_idx +=1 results in current_idx >= len(question_ids), then it finalizes.
-                // This will work.
-                handleTestCompletion(data); // Assuming it comes back with test_completed details
-            }
-        })
-        .catch(error => console.error('Error finishing test:', error));
+            .then(res => res.json())
+            .then(data => {
+                if (data.test_completed) {
+                    handleTestCompletion(data);
+                } else {
+                    // This scenario (not completed after finish click) should ideally not happen if server is robust.
+                    // Potentially show an error or force redirect.
+                    alert("Finishing... If not redirected, please wait or refresh.");
+                    // To force submission, an actual /api/finalize_test would be cleaner.
+                    // For now, let's make it call nextQuestion until it is completed.
+                    // This is a bit of a hack. A dedicated API endpoint would be better.
+                    // Let's assume the existing "Next Question" handles test completion properly.
+                    // If user clicks Finish when on Q3 of 10, they forfeit remaining.
+                    // The current /api/next_question, if it knows it's the *last* action:
+                    // Server's /api/next_question, if current_idx +=1 results in current_idx >= len(question_ids), then it finalizes.
+                    // This will work.
+                    handleTestCompletion(data); // Assuming it comes back with test_completed details
+                }
+            })
+            .catch(error => console.error('Error finishing test:', error));
     }
 }
 
@@ -311,7 +314,7 @@ function updateQuestionDisplay(data) {
     } else {
         remarksContainer.style.display = 'none';
     }
-    
+
     // Adjust UI for question type
     const codeEditorDiv = document.getElementById('code-editor-container');
     const mcqOptionsDiv = document.getElementById('mcq-options-container');
@@ -341,6 +344,13 @@ function updateQuestionDisplay(data) {
             codeMirrorEditor.setValue(data.starter_code || "");
         }
         runCodeBtn.textContent = 'Run Code';
+    } else if (data.language === 'java') {
+        if (codeEditorDiv && codeMirrorEditor) {
+            codeEditorDiv.style.display = 'block';
+            codeMirrorEditor.setOption("mode", "text/x-java");
+            codeMirrorEditor.setValue(data.starter_code || "");
+        }
+        runCodeBtn.textContent = 'Run Code';
     } else if (data.language === 'mcq') {
         if (mcqOptionsDiv) {
             mcqOptionsDiv.style.display = 'block';
@@ -358,7 +368,7 @@ function updateQuestionDisplay(data) {
         }
         runCodeBtn.textContent = 'Submit Answer';
     }
-    
+
     if (codeMirrorEditor) codeMirrorEditor.refresh(); // Refresh editor in case its container was hidden/shown
 
     // Update progress bar
@@ -366,7 +376,7 @@ function updateQuestionDisplay(data) {
     const progressPercent = (data.current_q_num / data.total_questions) * 100;
     progressBar.style.width = `${progressPercent}%`;
     progressBar.setAttribute('aria-valuenow', progressPercent);
-    
+
     // Timer
     startQuestionTimer(data.time_limit_seconds);
     document.getElementById('output-area').innerHTML = '<p class="text-muted">Output will appear here.</p>'; // Clear previous output
@@ -378,11 +388,11 @@ function updateQuestionDisplay(data) {
     // The finish button could appear on the last question, or be always available (after 1st q?).
     const finishBtn = document.getElementById('finish-test-btn');
     if (data.current_q_num >= data.total_questions) { // Show finish on last question.
-         document.getElementById('next-question-btn').style.display = 'none'; // Hide next on last q
-         finishBtn.style.display = 'inline-block';
+        document.getElementById('next-question-btn').style.display = 'none'; // Hide next on last q
+        finishBtn.style.display = 'inline-block';
     } else {
-         document.getElementById('next-question-btn').style.display = 'inline-block';
-         finishBtn.style.display = 'none'; // Hide finish unless on last q
+        document.getElementById('next-question-btn').style.display = 'inline-block';
+        finishBtn.style.display = 'none'; // Hide finish unless on last q
     }
     // Or, always show finish test button:
     // finishBtn.style.display = 'inline-block';
@@ -393,7 +403,7 @@ function updateQuestionDisplay(data) {
 function updateQuestionNavigationPanel() {
     const panel = document.getElementById('question-navigation-panel');
     if (!panel || !questionPanelData) return;
-    
+
     panel.innerHTML = ''; // Clear previous items
 
     if (questionPanelData.length === 0) {
